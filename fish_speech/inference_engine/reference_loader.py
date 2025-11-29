@@ -31,10 +31,19 @@ class ReferenceLoader:
         self.encode_reference: Callable
 
         # Define the torchaudio backend
-        backends = torchaudio.list_audio_backends()
-        if "ffmpeg" in backends:
-            self.backend = "ffmpeg"
-        else:
+        try:
+            # For newer versions of torchaudio that don't have list_audio_backends
+            if hasattr(torchaudio, 'list_audio_backends'):
+                backends = torchaudio.list_audio_backends()
+                if "ffmpeg" in backends:
+                    self.backend = "ffmpeg"
+                else:
+                    self.backend = "soundfile"
+            else:
+                # Fallback for newer versions - try to use soundfile as default
+                self.backend = "soundfile"
+        except Exception:
+            # If there's any issue, default to soundfile
             self.backend = "soundfile"
 
     def load_by_id(
