@@ -31,16 +31,22 @@ class ReferenceLoader:
         self.encode_reference: Callable
 
         # Define the torchaudio backend
+        # Check for available backends and set priority: soundfile > sox > ffmpeg
+        # Avoid torchcodec backend which requires additional installation
         try:
-            # For newer versions of torchaudio that don't have list_audio_backends
             if hasattr(torchaudio, 'list_audio_backends'):
                 backends = torchaudio.list_audio_backends()
-                if "ffmpeg" in backends:
+                if "soundfile" in backends:
+                    self.backend = "soundfile"
+                elif "sox" in backends:
+                    self.backend = "sox"
+                elif "ffmpeg" in backends:
                     self.backend = "ffmpeg"
                 else:
+                    # If none of the preferred backends are available, default to soundfile
                     self.backend = "soundfile"
             else:
-                # Fallback for newer versions - try to use soundfile as default
+                # For older versions, try to use soundfile as default
                 self.backend = "soundfile"
         except Exception:
             # If there's any issue, default to soundfile
@@ -123,7 +129,14 @@ class ReferenceLoader:
             audio_data = reference_audio
             reference_audio = io.BytesIO(audio_data)
 
-        waveform, original_sr = torchaudio.load(reference_audio, backend=self.backend)
+        # Set the audio backend temporarily to avoid torchcodec
+        try:
+            torchaudio.set_audio_backend(self.backend)
+        except Exception:
+            # If setting backend fails, continue with default
+            pass
+
+        waveform, original_sr = torchaudio.load(reference_audio)
 
         if waveform.shape[0] > 1:
             waveform = torch.mean(waveform, dim=0, keepdim=True)
