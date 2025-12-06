@@ -2,19 +2,68 @@
 
 ## 功能说明
 
-这个脚本可以基于同一个参考音频（.npy文件），高效地批量生成多个文本的语音。特点：
+这个脚本提供两种模式，支持完整的批量推理工作流：
 
+### 模式 1: 批量生成 VQ Codes (.npy 文件)
+- **一次性处理多个参考音频**：批量提取参考音频的 VQ codes
+- **自动命名**：根据音频文件名自动生成对应的 .npy 文件
+- **完整记录**：保存每个参考音频和对应文本的映射关系
+
+### 模式 2: 批量生成语音
+- **基于参考音频高效生成**：使用提取好的 VQ codes 批量生成语音
 - **模型只加载一次**：避免重复加载模型，大幅提升效率
 - **批量生成**：适合生成多段文本、长文本分段处理
+
+### 共同特点
 - **自动设备检测**：支持 CUDA、MPS（Apple Silicon）、CPU
-- **完善的错误处理**：每个文本生成失败不会影响其他文本
+- **完善的错误处理**：单个任务失败不影响其他任务
 - **显存优化**：每次生成后自动清理显存
 
-## 使用前准备
+## 使用流程
 
-### 1. 准备参考音频的 VQ Codes（.npy 文件）
+### 方式一：使用本脚本批量生成 .npy 文件（推荐）
 
-在批量生成之前，需要先提取参考音频的 VQ codes：
+#### 步骤 1: 配置参考音频和文本
+
+编辑 `batch_inference.py`，配置参考音频列表和对应的文本：
+
+```python
+# 参考文本列表（每个文本对应一个参考音频）
+REF_TEXT_DEFAULT_LIST = [
+    "CosyVoice迎来全面升级，提供更准、更稳、更快、更好的语音生成能力。",
+    "我是你大哥 是个小包工头 二哥顺路给你买回来",
+    "对啊 除了你大哥呢 你还有4个哥哥"
+]
+
+# 参考音频路径列表（需要与文本列表一一对应）
+REF_AUDIO_PATH_LIST = [
+    "data/emb_yiya.wav",
+    "data/speaker_0_reference.wav",
+    "data/speaker_1_reference.wav"
+]
+```
+
+#### 步骤 2: 设置模式为生成 .npy
+
+```python
+MODE = "generate_npy"  # 批量生成 .npy 文件
+```
+
+#### 步骤 3: 运行脚本
+
+```bash
+conda activate fish-audio
+python batch_inference.py
+```
+
+执行后会在 `data` 目录生成：
+- `data/emb_yiya_codes.npy`
+- `data/speaker_0_reference_codes.npy`
+- `data/speaker_1_reference_codes.npy`
+
+### 方式二：手动生成单个 .npy 文件
+
+如果只需要处理单个参考音频：
 
 ```bash
 # 激活 conda 环境
@@ -28,28 +77,24 @@ python fish_speech/models/dac/inference.py \
   -o data/fake.wav
 ```
 
-执行后会生成 `data/fake.npy` 文件，这就是参考音频的 VQ codes。
+执行后会生成 `data/fake.npy` 文件。
 
-### 2. 修改配置
+### 步骤 4: 批量生成语音
+
+#### 4.1 修改配置
 
 编辑 `batch_inference.py` 中的配置区域：
 
 ```python
-# ============================= 配置区域 =============================
-SPEAKER_NAME = 'yiya'  # 说话人名称（可选，仅用于标识）
+# ===== 模式选择 =====
+MODE = "generate_audio"  # 切换到批量生成语音模式
 
 # 参考音频对应的文本内容（非常重要！）
 # 这个文本应该是参考音频实际说的内容
 REF_TEXT_DEFAULT = "CosyVoice迎来全面升级，提供更准、更稳、更快、更好的语音生成能力。"
 
-# 模型路径
-CHECKPOINT_PATH = "checkpoints/openaudio-s1-mini"
-
-# Prompt tokens 文件路径（上一步生成的 .npy 文件）
-PROMPT_TOKENS_PATH = "data/fake.npy"
-
-# 输出目录
-OUTPUT_DIR = "data"
+# Prompt tokens 文件路径（之前生成的 .npy 文件）
+PROMPT_TOKENS_PATH = "data/emb_yiya_codes.npy"  # 使用批量生成的文件
 
 # 要批量生成的文本列表
 TEXT_LIST = [
@@ -63,10 +108,9 @@ MAX_NEW_TOKENS = 1024      # 最大生成 token 数，文本越长需要越多
 TOP_P = 0.7                # 采样参数
 TEMPERATURE = 0.7          # 温度参数
 REPETITION_PENALTY = 1.2   # 重复惩罚
-# ======================================================================
 ```
 
-## 运行脚本
+#### 4.2 运行脚本
 
 ```bash
 # 激活 conda 环境
@@ -105,11 +149,57 @@ python batch_inference.py
 - 1.1-1.3：轻微惩罚，适合大多数情况
 - 1.3-1.5：较强惩罚，避免重复
 
+## 快速开始示例
+
+### 完整工作流示例
+
+假设你有 3 个不同说话人的参考音频，想为每个说话人生成不同的文本：
+
+1. **准备参考音频和文本**
+   ```python
+   REF_AUDIO_PATH_LIST = [
+       "data/speaker_A.wav",
+       "data/speaker_B.wav",
+       "data/speaker_C.wav"
+   ]
+
+   REF_TEXT_DEFAULT_LIST = [
+       "这是说话人A的参考文本。",
+       "这是说话人B的参考文本。",
+       "这是说话人C的参考文本。"
+   ]
+   ```
+
+2. **批量生成 .npy 文件**
+   ```python
+   MODE = "generate_npy"
+   ```
+   运行后得到：
+   - `data/speaker_A_codes.npy`
+   - `data/speaker_B_codes.npy`
+   - `data/speaker_C_codes.npy`
+
+3. **使用不同说话人生成语音**
+   ```python
+   MODE = "generate_audio"
+   PROMPT_TOKENS_PATH = "data/speaker_A_codes.npy"  # 选择说话人A
+   REF_TEXT_DEFAULT = "这是说话人A的参考文本。"
+   TEXT_LIST = ["要生成的文本1", "要生成的文本2"]
+   ```
+
 ## 常见问题
+
+### Q: REF_AUDIO_PATH_LIST 和 REF_TEXT_DEFAULT_LIST 长度不一致
+
+A: 这两个列表必须一一对应，每个参考音频都需要有对应的参考文本。检查列表长度是否相同。
+
+### Q: 提示 "参考音频文件不存在"
+
+A: 检查 REF_AUDIO_PATH_LIST 中的路径是否正确，文件是否存在。
 
 ### Q: 提示 "Prompt tokens 文件不存在"
 
-A: 需要先运行步骤1，提取参考音频的 VQ codes。
+A: 需要先运行 `MODE = "generate_npy"` 模式，生成参考音频的 VQ codes。
 
 ### Q: 生成的音频质量不好
 
@@ -143,8 +233,26 @@ A: 建议：
 
 ## 技术细节
 
-脚本工作流程：
+### 模式 1: 批量生成 .npy 文件
 
+工作流程：
+1. **检查文件**：验证模型和参考音频文件是否存在
+2. **加载 DAC 模型**：用于音频编码
+3. **批量处理参考音频**：
+   - 对每个参考音频：
+     - 加载音频文件
+     - 转换为单声道（如需要）
+     - 重采样到模型采样率
+     - 编码为 VQ codes
+     - 保存为 .npy 文件
+     - 清理显存
+4. **输出文件列表**：显示所有生成的文件及其对应关系
+
+生成的 .npy 文件命名规则：`{原音频文件名}_codes.npy`
+
+### 模式 2: 批量生成语音
+
+工作流程：
 1. **检查文件**：验证模型、prompt tokens 等文件是否存在
 2. **加载模型**：加载 Text2Semantic 模型和 DAC Codec 模型（只加载一次）
 3. **加载 Prompt Tokens**：读取参考音频的 VQ codes
@@ -155,6 +263,30 @@ A: 建议：
      - 保存音频文件
      - 清理显存
 5. **完成**
+
+## 配置参数完整说明
+
+### 模式控制
+
+```python
+MODE = "generate_npy"    # 批量生成 .npy 文件
+MODE = "generate_audio"  # 批量生成语音
+```
+
+### 批量生成 .npy 文件相关
+
+```python
+REF_AUDIO_PATH_LIST = [...]      # 参考音频路径列表
+REF_TEXT_DEFAULT_LIST = [...]    # 参考文本列表（与音频一一对应）
+```
+
+### 批量生成语音相关
+
+```python
+PROMPT_TOKENS_PATH = "..."       # 使用哪个 .npy 文件
+REF_TEXT_DEFAULT = "..."         # 该 .npy 对应的参考文本
+TEXT_LIST = [...]                # 要生成的文本列表
+```
 
 ## 许可证
 
